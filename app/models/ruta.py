@@ -23,6 +23,7 @@ class Ruta(Base):
     __tablename__ = "rutas"
 
     id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, index=True, nullable=True)  # legible: RT-001
     nombre = Column(String(100), nullable=False)  # ej: "Ruta San Miguel - Tarde"
     # Estado de la operación: CREADA -> EN_PROGRESO -> FINALIZADA
     estado = Column(String(50), default="CREADA")
@@ -42,6 +43,7 @@ class RutaDetalle(Base):
     __tablename__ = "ruta_detalles"
 
     id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, index=True, nullable=True)    # legible: RD-001
     ruta_id = Column(Integer, ForeignKey("rutas.id"), nullable=False)      # a qué ruta pertenece
     pedido_id = Column(Integer, ForeignKey("pedidos.id"), nullable=False)  # qué pedido representa
 

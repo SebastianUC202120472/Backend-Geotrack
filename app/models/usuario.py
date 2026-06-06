@@ -17,6 +17,7 @@ class Usuario(Base):
     __tablename__ = "usuarios"  # nombre real de la tabla en la BD
 
     id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, index=True, nullable=True)  # legible: AD-001 / CO-001 (según rol)
     correo = Column(String(100), unique=True, index=True, nullable=False)  # login (único)
     hash_contrasena = Column(String(255), nullable=False)  # contraseña ENCRIPTADA (nunca en texto)
     rol = Column(String(20), nullable=False)               # 'admin' (Web) o 'conductor' (App Móvil)

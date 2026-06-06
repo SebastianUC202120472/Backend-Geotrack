@@ -69,7 +69,7 @@ def validar_paquete_qr(
     db: Session = Depends(get_db),
     conductor: Usuario = Depends(get_current_conductor),
 ):
-    return ruta_service.validar_paquete_qr(db, conductor.id, solicitud.numero_tracking)
+    return ruta_service.validar_paquete_qr(db, conductor.id, solicitud.codigo)
 
 
 # --- CUS-26: marcar entrega ENTREGADO / FALLIDO (Fase 3.3) ---

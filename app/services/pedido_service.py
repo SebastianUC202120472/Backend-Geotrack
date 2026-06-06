@@ -22,10 +22,10 @@ from sqlalchemy.orm import Session
 from app.models.pedido import Pedido
 from app.repositories import pedido_repository, cliente_repository, historial_repository
 from app.services.geocoder import obtener_coordenadas
+from app.core.codigos import asignar_codigo, PREFIJO_PEDIDO
 
-# Columnas mínimas que debe traer el Excel. El nombre del cliente puede venir
-# como 'razon_social_cliente' (recomendado) o como 'cliente_origen' (compatibilidad).
-COLUMNAS_REQUERIDAS = ["numero_tracking", "direccion_destino"]
+# Columna mínima obligatoria del Excel (el nombre del cliente se valida aparte).
+COLUMNAS_REQUERIDAS = ["direccion_destino"]
 
 
 def _valor(fila, df, *nombres):
@@ -64,9 +64,11 @@ def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str, usu
     # 4) Construir los pedidos nuevos.
     nuevos: list[Pedido] = []
     for _, fila in df.iterrows():
-        tracking = str(fila["numero_tracking"])
-        if pedido_repository.obtener_por_tracking(db, tracking):
-            continue  # ya existe -> no duplicar
+        # Referencia externa: el id que trae el Excel (opcional). NO es el tracking;
+        # nuestro tracking será el código PD-001 que generamos abajo.
+        referencia = _str_o_none(_valor(fila, df, "referencia_externa", "numero_tracking", "id"))
+        if referencia and pedido_repository.obtener_por_referencia_externa(db, referencia):
+            continue  # ya se importó antes -> no duplicar
 
         # Cliente (empresa que envía): se busca o se crea automáticamente.
         razon = str(_valor(fila, df, "razon_social_cliente", "cliente_origen"))
@@ -79,7 +81,7 @@ def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str, usu
 
         nuevos.append(
             Pedido(
-                numero_tracking=tracking,
+                referencia_externa=referencia,
                 cliente_id=cliente.id,
                 cliente_origen=razon,  # snapshot del nombre del cliente
                 direccion_destino=str(fila["direccion_destino"]),
@@ -92,11 +94,12 @@ def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str, usu
             )
         )
 
-    # 5) Guardar pedidos + su primer evento de historial (REGISTRADO).
+    # 5) Guardar pedidos: asignar el código PD-001 y registrar el evento inicial.
     if nuevos:
         db.add_all(nuevos)
         db.flush()  # asigna ids sin cerrar la transacción
         for p in nuevos:
+            asignar_codigo(db, p, PREFIJO_PEDIDO)  # codigo legible PD-001 (= tracking/QR)
             historial_repository.registrar(db, p.id, None, "PENDIENTE", usuario_id)
         db.commit()
 

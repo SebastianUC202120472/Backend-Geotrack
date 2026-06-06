@@ -18,7 +18,7 @@ from pydantic import BaseModel, field_validator
 class ParadaNavegacion(BaseModel):
     secuencia: int
     pedido_id: int
-    numero_tracking: str
+    codigo: Optional[str] = None  # PD-001
     latitud: float
     longitud: float
 
@@ -28,7 +28,7 @@ class ParadaManifiesto(BaseModel):
     secuencia: int
     detalle_id: int
     pedido_id: int
-    numero_tracking: str
+    codigo: Optional[str] = None  # PD-001 (lo que va en el QR)
     cliente_origen: str  # empresa que envía (snapshot)
     nombre_destinatario: Optional[str] = None    # persona que recibe
     telefono_destinatario: Optional[str] = None  # para coordinar la entrega
@@ -43,6 +43,7 @@ class ParadaManifiesto(BaseModel):
 # --- CUS-21: resumen de la ruta activa del conductor ---
 class RutaActivaResponse(BaseModel):
     ruta_id: int
+    codigo: Optional[str] = None  # RT-001
     nombre: str
     estado: str  # CREADA, EN_PROGRESO
     fecha_creacion: datetime
@@ -56,6 +57,7 @@ class RutaActivaResponse(BaseModel):
 # --- CUS-24: manifiesto completo y ordenado ---
 class ManifiestoResponse(BaseModel):
     ruta_id: int
+    codigo: Optional[str] = None  # RT-001
     nombre: str
     estado: str
     total_paradas: int
@@ -71,7 +73,7 @@ class NavegacionResponse(BaseModel):
 
 # ============ FASE 3.2: Validación en almacén (CUS-22) ============
 class ValidacionQRRequest(BaseModel):
-    numero_tracking: str
+    codigo: str  # el código PD-001 escaneado del QR
 
 
 class ValidacionQRResponse(BaseModel):
@@ -97,7 +99,7 @@ class ActualizarEstadoRequest(BaseModel):
 
 class GestionParadaResponse(BaseModel):
     pedido_id: int
-    numero_tracking: str
+    codigo: Optional[str] = None  # PD-001
     estado_entrega: str
     motivo_fallo: Optional[str] = None
     url_evidencia: Optional[str] = None
@@ -108,6 +110,7 @@ class GestionParadaResponse(BaseModel):
 # ============ FASE 3.4: Cierre de operación (CUS-28) ============
 class CierreRutaResponse(BaseModel):
     ruta_id: int
+    codigo: Optional[str] = None  # RT-001
     nombre: str
     estado: str
     fecha_fin: Optional[datetime] = None
@@ -127,9 +130,10 @@ class AsignacionBloqueRequest(BaseModel):
 
 
 class AsignacionBloqueResponse(BaseModel):
-    """SALIDA (CUS-18): confirmación con el id de la ruta creada."""
+    """SALIDA (CUS-18): confirmación con el id y código de la ruta creada."""
     mensaje: str
     ruta_id: int
+    codigo: Optional[str] = None  # RT-001
 
 
 class OptimizacionRequest(BaseModel):

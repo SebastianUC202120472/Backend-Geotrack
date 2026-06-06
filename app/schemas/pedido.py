@@ -16,7 +16,8 @@ from pydantic import BaseModel
 class PedidoResponse(BaseModel):
     """Molde de SALIDA de un pedido (todas sus columnas)."""
     id: int
-    numero_tracking: str
+    codigo: Optional[str] = None            # PD-001 (tracking real / QR)
+    referencia_externa: Optional[str] = None  # id que vino en el Excel (opcional)
     cliente_id: Optional[int] = None        # empresa que envía (FK a clientes_corporativos)
     cliente_origen: str                     # nombre del cliente (snapshot)
     direccion_destino: str

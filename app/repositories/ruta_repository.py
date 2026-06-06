@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ruta import Ruta, RutaDetalle
 from app.models.pedido import Pedido
+from app.core.codigos import asignar_codigo, PREFIJO_RUTA, PREFIJO_DETALLE
 
 # Una ruta se considera "activa" mientras no haya sido finalizada (CUS-28).
 ESTADOS_RUTA_ACTIVA = ("CREADA", "EN_PROGRESO")
@@ -45,13 +46,9 @@ def obtener_detalles_con_pedido(
     )
 
 
-def obtener_pedido_por_tracking(db: Session, numero_tracking: str) -> Optional[Pedido]:
-    """Busca un pedido por su número de tracking (lectura QR)."""
-    return (
-        db.query(Pedido)
-        .filter(Pedido.numero_tracking == numero_tracking)
-        .first()
-    )
+def obtener_pedido_por_codigo(db: Session, codigo: str) -> Optional[Pedido]:
+    """Busca un pedido por su código legible 'PD-001' (lo que se escanea por QR)."""
+    return db.query(Pedido).filter(Pedido.codigo == codigo).first()
 
 
 def obtener_detalle_de_ruta(
@@ -81,7 +78,7 @@ def crear_ruta(db: Session, nombre: str, conductor_id: int) -> Ruta:
     """
     ruta = Ruta(nombre=nombre, conductor_id=conductor_id)
     db.add(ruta)
-    db.flush()  # asigna ruta.id sin hacer commit todavía
+    asignar_codigo(db, ruta, PREFIJO_RUTA)  # codigo legible RT-001 (hace flush -> id)
     return ruta
 
 
@@ -89,6 +86,7 @@ def agregar_detalle(db: Session, ruta_id: int, pedido_id: int, secuencia: int = 
     """Cuelga un pedido a una ruta (fila en 'ruta_detalles'). No hace commit."""
     detalle = RutaDetalle(ruta_id=ruta_id, pedido_id=pedido_id, secuencia=secuencia)
     db.add(detalle)
+    asignar_codigo(db, detalle, PREFIJO_DETALLE)  # codigo legible RD-001
     return detalle
 
 

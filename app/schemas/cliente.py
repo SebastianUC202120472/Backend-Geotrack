@@ -20,6 +20,7 @@ class ClienteCreate(BaseModel):
 class ClienteResponse(BaseModel):
     """SALIDA: datos de una empresa cliente."""
     id: int
+    codigo: Optional[str] = None  # CL-001
     razon_social: str
     identificador_unico: Optional[str] = None
     contacto: Optional[str] = None

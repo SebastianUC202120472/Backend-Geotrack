@@ -11,6 +11,7 @@
 #   - Lo USAN: api/auth.py y services/usuario_service.py.
 # ============================================================================
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 
@@ -31,6 +32,7 @@ class UsuarioCreate(BaseModel):
 class UsuarioResponse(BaseModel):
     """Molde de SALIDA: lo que devolvemos al cliente (SIN la contraseña)."""
     id: int
+    codigo: Optional[str] = None  # AD-001 / CO-001
     correo: EmailStr
     rol: str
     estado: bool

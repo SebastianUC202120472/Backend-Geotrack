@@ -120,12 +120,12 @@ Body (el `ruta_id` que anotaste + tu posición actual de ejemplo):
 - ✅ Esperado: los waypoints (solo `secuencia` + `lat/lng`) para el mapa.
 
 ### 3.5 Validar QR en almacén — `POST /api/conductor/almacen/validar-qr` (CUS-22)
-Body (con un tracking de TU ruta):
+Body (con el **código PD-001** de TU ruta — lo ves en el manifiesto):
 ```json
-{ "numero_tracking": "TRK-001" }
+{ "codigo": "PD-001" }
 ```
 - ✅ Esperado: `{ "pertenece": true, "mensaje": "Paquete validado...", "parada": {...} }`.
-- 🧪 Prueba el caso negativo con `"TRK-004"` (es de Miraflores, otra ruta):
+- 🧪 Prueba el caso negativo con un `codigo` de Miraflores (otra ruta):
   → `{ "pertenece": false, "mensaje": "Este paquete NO pertenece a tu ruta de hoy" }`.
 
 ### 3.6 Marcar ENTREGADO — `PATCH /api/conductor/paradas/{pedido_id}/estado` (CUS-26)
@@ -204,8 +204,8 @@ funcionan de punta a punta.**
   entregadas/fallidas/pendientes y el correo del conductor.
 - 💡 Si cerraste la ruta antes, la verás como `FINALIZADA` con su `fecha_fin`.
 
-### 4.3 Historial de un paquete — `GET /api/dashboard/pedidos/{tracking}/historial` (CUS-35)
-- Pon un tracking que ya gestionaste (ej. `TRK-001`).
+### 4.3 Historial de un paquete — `GET /api/dashboard/pedidos/{codigo}/historial` (CUS-35)
+- Pon el **código** de un paquete que ya gestionaste (ej. `PD-001`).
 - ✅ Esperado: la línea de tiempo **real** (`eventos`, leída de `historial_pedidos`):
   `PENDIENTE → ASIGNADO → EN_RUTA → ENTREGADO/FALLIDO`, cada evento con su
   **fecha** y el **`realizado_por`** (correo de quién lo hizo: admin o conductor),

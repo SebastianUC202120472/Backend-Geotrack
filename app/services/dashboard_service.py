@@ -112,17 +112,17 @@ def obtener_resumen(db: Session) -> ResumenResponse:
 
 
 # ============ CUS-35: Historial / línea de tiempo de un paquete ============
-def obtener_historial(db: Session, numero_tracking: str) -> HistorialPedidoResponse:
+def obtener_historial(db: Session, codigo: str) -> HistorialPedidoResponse:
     """
-    CUS-35: línea de tiempo REAL de un paquete, leída de la tabla
-    'historial_pedidos' (cada cambio de estado quedó registrado con su fecha y
-    el usuario que lo hizo). Se complementa con datos de la ruta y la evidencia.
+    CUS-35: línea de tiempo REAL de un paquete (por su código PD-001), leída de
+    la tabla 'historial_pedidos' (cada cambio quedó registrado con fecha y
+    usuario). Se complementa con datos de la ruta y la evidencia.
     """
-    pedido = pedido_repository.obtener_por_tracking(db, numero_tracking)
+    pedido = pedido_repository.obtener_por_codigo(db, codigo)
     if not pedido:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No existe un pedido con tracking '{numero_tracking}'",
+            detail=f"No existe un pedido con código '{codigo}'",
         )
 
     # Eventos reales registrados, en orden cronológico.
@@ -160,7 +160,7 @@ def obtener_historial(db: Session, numero_tracking: str) -> HistorialPedidoRespo
         motivo_fallo = detalle.motivo_fallo
 
     return HistorialPedidoResponse(
-        numero_tracking=pedido.numero_tracking,
+        codigo=pedido.codigo,
         cliente_origen=pedido.cliente_origen,
         direccion_destino=pedido.direccion_destino,
         distrito=pedido.distrito,

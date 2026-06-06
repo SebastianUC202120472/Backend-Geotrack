@@ -48,7 +48,7 @@ def _construir_parada(detalle: RutaDetalle, pedido: Pedido) -> ParadaManifiesto:
         secuencia=detalle.secuencia,
         detalle_id=detalle.id,
         pedido_id=pedido.id,
-        numero_tracking=pedido.numero_tracking,
+        codigo=pedido.codigo,
         cliente_origen=pedido.cliente_origen,
         # Datos del destinatario: el conductor necesita saber a QUIÉN entrega.
         nombre_destinatario=pedido.nombre_destinatario,
@@ -83,6 +83,7 @@ def obtener_resumen_ruta_activa(db: Session, conductor_id: int) -> RutaActivaRes
 
     return RutaActivaResponse(
         ruta_id=ruta.id,
+        codigo=ruta.codigo,
         nombre=ruta.nombre,
         estado=ruta.estado,
         fecha_creacion=ruta.fecha_creacion,
@@ -103,6 +104,7 @@ def obtener_manifiesto(db: Session, conductor_id: int) -> ManifiestoResponse:
 
     return ManifiestoResponse(
         ruta_id=ruta.id,
+        codigo=ruta.codigo,
         nombre=ruta.nombre,
         estado=ruta.estado,
         total_paradas=len(paradas),
@@ -119,7 +121,7 @@ def obtener_navegacion(db: Session, conductor_id: int) -> NavegacionResponse:
         ParadaNavegacion(
             secuencia=detalle.secuencia,
             pedido_id=pedido.id,
-            numero_tracking=pedido.numero_tracking,
+            codigo=pedido.codigo,
             latitud=pedido.latitud,
             longitud=pedido.longitud,
         )
@@ -136,16 +138,16 @@ def obtener_navegacion(db: Session, conductor_id: int) -> NavegacionResponse:
 
 # ============ FASE 3.2: Validación en almacén (CUS-22) ============
 def validar_paquete_qr(
-    db: Session, conductor_id: int, numero_tracking: str
+    db: Session, conductor_id: int, codigo: str
 ) -> ValidacionQRResponse:
-    """Verifica si el paquete escaneado pertenece a la ruta activa del conductor."""
+    """Verifica si el paquete escaneado (código PD-001) pertenece a la ruta activa."""
     ruta = _obtener_ruta_activa_o_404(db, conductor_id)
 
-    pedido = ruta_repository.obtener_pedido_por_tracking(db, numero_tracking)
+    pedido = ruta_repository.obtener_pedido_por_codigo(db, codigo)
     if not pedido:
         return ValidacionQRResponse(
             pertenece=False,
-            mensaje=f"El paquete '{numero_tracking}' no existe en el sistema",
+            mensaje=f"El paquete '{codigo}' no existe en el sistema",
         )
 
     detalle = ruta_repository.obtener_detalle_de_ruta(db, ruta.id, pedido.id)
@@ -216,7 +218,7 @@ def actualizar_estado_parada(
 
     return GestionParadaResponse(
         pedido_id=pedido.id,
-        numero_tracking=pedido.numero_tracking,
+        codigo=pedido.codigo,
         estado_entrega=detalle.estado_entrega,
         motivo_fallo=detalle.motivo_fallo,
         url_evidencia=detalle.url_evidencia,
@@ -256,7 +258,7 @@ def guardar_evidencia(
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     return GestionParadaResponse(
         pedido_id=pedido.id,
-        numero_tracking=pedido.numero_tracking,
+        codigo=pedido.codigo,
         estado_entrega=detalle.estado_entrega,
         motivo_fallo=detalle.motivo_fallo,
         url_evidencia=detalle.url_evidencia,
@@ -285,6 +287,7 @@ def finalizar_ruta(db: Session, conductor_id: int) -> CierreRutaResponse:
 
     return CierreRutaResponse(
         ruta_id=ruta.id,
+        codigo=ruta.codigo,
         nombre=ruta.nombre,
         estado=ruta.estado,
         fecha_fin=ruta.fecha_fin,
@@ -322,6 +325,7 @@ def asignar_bloque(db: Session, datos: AsignacionBloqueRequest, usuario_id: int 
     return {
         "mensaje": f"{len(pedidos)} pedidos asignados a la ruta '{datos.nombre_ruta}'",
         "ruta_id": ruta.id,
+        "codigo": ruta.codigo,
     }
 
 

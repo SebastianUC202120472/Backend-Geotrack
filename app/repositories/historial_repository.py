@@ -12,6 +12,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.historial import HistorialPedido
+from app.core.codigos import asignar_codigo, PREFIJO_HISTORIAL
 
 
 def registrar(
@@ -32,6 +33,7 @@ def registrar(
         usuario_id=usuario_id,
     )
     db.add(evento)
+    asignar_codigo(db, evento, PREFIJO_HISTORIAL)  # codigo legible HP-001
     return evento
 
 

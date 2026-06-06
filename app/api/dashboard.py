@@ -38,10 +38,10 @@ def obtener_flota(db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/pedidos/{numero_tracking}/historial",
+    "/pedidos/{codigo}/historial",
     response_model=HistorialPedidoResponse,
     dependencies=[Depends(get_current_admin)],
 )
-def obtener_historial(numero_tracking: str, db: Session = Depends(get_db)):
-    """CUS-35: línea de tiempo completa de un paquete específico."""
-    return dashboard_service.obtener_historial(db, numero_tracking)
+def obtener_historial(codigo: str, db: Session = Depends(get_db)):
+    """CUS-35: línea de tiempo completa de un paquete (por su código PD-001)."""
+    return dashboard_service.obtener_historial(db, codigo)

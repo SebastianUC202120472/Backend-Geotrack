@@ -35,6 +35,7 @@ from app.api.rutas import router as rutas_router
 from app.api.conductor import router as conductor_router
 from app.api.dashboard import router as dashboard_router  # Fase 4: trazabilidad
 from app.api.clientes import router as clientes_router    # Fase 4: clientes corporativos
+from app.api.vehiculos import router as vehiculos_router  # Fase 4: flota de vehículos
 
 
 async def tarea_limpieza_usuarios():
@@ -122,6 +123,7 @@ app.mount("/media", StaticFiles(directory="uploads"), name="media")
 # Registro de routers. Cada 'prefix' es la base de las URLs de ese módulo.
 app.include_router(auth_router, prefix="/api/auth", tags=["Autenticación"])
 app.include_router(clientes_router, prefix="/api/clientes", tags=["Clientes Corporativos"])
+app.include_router(vehiculos_router, prefix="/api/vehiculos", tags=["Flota de Vehículos"])
 app.include_router(pedidos_router, prefix="/api/pedidos", tags=["Gestión de Pedidos"])
 app.include_router(rutas_router, prefix="/api/rutas", tags=["Enrutamiento y Flota"])
 app.include_router(conductor_router, prefix="/api/conductor", tags=["App Móvil - Conductor"])

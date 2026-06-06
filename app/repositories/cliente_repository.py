@@ -12,6 +12,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.cliente import ClienteCorporativo
+from app.core.codigos import asignar_codigo, PREFIJO_CLIENTE
 
 
 def listar(db: Session) -> List[ClienteCorporativo]:
@@ -50,7 +51,7 @@ def crear(db: Session, razon_social: str, identificador_unico=None, contacto=Non
         contacto=contacto,
     )
     db.add(cliente)
-    db.flush()
+    asignar_codigo(db, cliente, PREFIJO_CLIENTE)  # codigo legible CL-001 (hace flush)
     return cliente
 
 

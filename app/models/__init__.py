@@ -5,6 +5,7 @@
 #   - Alembic (alembic/env.py) para detectar cambios y generar migraciones.
 from .usuario import Usuario
 from .cliente import ClienteCorporativo
+from .vehiculo import Vehiculo
 from .pedido import Pedido
 from .ruta import Ruta, RutaDetalle
 from .historial import HistorialPedido

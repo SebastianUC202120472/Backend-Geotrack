@@ -16,9 +16,14 @@ from sqlalchemy.orm import Session
 from app.models.pedido import Pedido
 
 
-def obtener_por_tracking(db: Session, numero_tracking: str) -> Optional[Pedido]:
-    """Busca un pedido por su número de tracking (clave única)."""
-    return db.query(Pedido).filter(Pedido.numero_tracking == numero_tracking).first()
+def obtener_por_codigo(db: Session, codigo: str) -> Optional[Pedido]:
+    """Busca un pedido por su código legible 'PD-001' (tracking / QR / historial)."""
+    return db.query(Pedido).filter(Pedido.codigo == codigo).first()
+
+
+def obtener_por_referencia_externa(db: Session, referencia: str) -> Optional[Pedido]:
+    """Busca un pedido por la referencia que vino en el Excel (para no duplicar)."""
+    return db.query(Pedido).filter(Pedido.referencia_externa == referencia).first()
 
 
 def crear_pedidos(db: Session, pedidos: List[Pedido]) -> None:

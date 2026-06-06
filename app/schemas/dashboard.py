@@ -57,7 +57,7 @@ class EventoHistorial(BaseModel):
 
 class HistorialPedidoResponse(BaseModel):
     """Trazabilidad completa de un paquete (CUS-35)."""
-    numero_tracking: str
+    codigo: Optional[str] = None  # PD-001
     cliente_origen: str
     direccion_destino: str
     distrito: Optional[str] = None

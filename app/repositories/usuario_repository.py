@@ -14,6 +14,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.usuario import Usuario
+from app.core.codigos import asignar_codigo, prefijo_por_rol
 
 
 def obtener_por_correo(db: Session, correo: str) -> Optional[Usuario]:
@@ -32,7 +33,8 @@ def crear_usuario(db: Session, correo: str, hash_contrasena: str, rol: str) -> U
     Nota: la contraseña ya llega ENCRIPTADA (el hash lo hace el servicio).
     """
     nuevo = Usuario(correo=correo, hash_contrasena=hash_contrasena, rol=rol)
-    db.add(nuevo)        # lo prepara para guardar
-    db.commit()          # confirma el cambio en PostgreSQL
-    db.refresh(nuevo)    # recarga el objeto con el id ya asignado por la BD
+    db.add(nuevo)                                   # lo prepara para guardar
+    asignar_codigo(db, nuevo, prefijo_por_rol(rol))  # codigo legible AD-001 / CO-001
+    db.commit()                                     # confirma el cambio en PostgreSQL
+    db.refresh(nuevo)                               # recarga el objeto con el id ya asignado
     return nuevo
