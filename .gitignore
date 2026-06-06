@@ -17,3 +17,7 @@ __pycache__/
 
 # Datos de Base de Datos local (si los tuvieras mapeados en una carpeta)
 postgres_data/
+
+# Evidencias POD subidas en runtime (CUS-29): versionamos la carpeta, no las fotos
+uploads/evidencias/*
+!uploads/evidencias/.gitkeep

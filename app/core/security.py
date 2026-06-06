@@ -20,3 +20,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_access_token(token: str) -> dict:
+    """Decodifica y valida un token JWT. Lanza JWTError si es inválido o expiró."""
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

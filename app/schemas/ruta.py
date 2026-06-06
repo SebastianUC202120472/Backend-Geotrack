@@ -1,0 +1,107 @@
+# app/schemas/ruta.py
+# Esquemas Pydantic de respuesta para la App Móvil del conductor (Fase 3).
+from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, field_validator
+
+
+# --- CUS-25: punto de navegación (waypoint para el mapa) ---
+class ParadaNavegacion(BaseModel):
+    secuencia: int
+    pedido_id: int
+    numero_tracking: str
+    latitud: float
+    longitud: float
+
+
+# --- CUS-24: parada completa del manifiesto ---
+class ParadaManifiesto(BaseModel):
+    secuencia: int
+    detalle_id: int
+    pedido_id: int
+    numero_tracking: str
+    cliente_origen: str
+    direccion_destino: str
+    distrito: Optional[str] = None
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
+    peso_kg: Optional[float] = None
+    estado_entrega: str  # PENDIENTE, ENTREGADO, FALLIDO
+
+
+# --- CUS-21: resumen de la ruta activa del conductor ---
+class RutaActivaResponse(BaseModel):
+    ruta_id: int
+    nombre: str
+    estado: str  # CREADA, EN_PROGRESO
+    fecha_creacion: datetime
+    vehiculo_placa: Optional[str] = None
+    total_paradas: int
+    pendientes: int
+    entregadas: int
+    fallidas: int
+
+
+# --- CUS-24: manifiesto completo y ordenado ---
+class ManifiestoResponse(BaseModel):
+    ruta_id: int
+    nombre: str
+    estado: str
+    total_paradas: int
+    paradas: List[ParadaManifiesto]
+
+
+# --- CUS-25: secuencia de navegación ---
+class NavegacionResponse(BaseModel):
+    ruta_id: int
+    total_paradas: int
+    paradas: List[ParadaNavegacion]
+
+
+# ============ FASE 3.2: Validación en almacén (CUS-22) ============
+class ValidacionQRRequest(BaseModel):
+    numero_tracking: str
+
+
+class ValidacionQRResponse(BaseModel):
+    pertenece: bool
+    mensaje: str
+    parada: Optional[ParadaManifiesto] = None
+
+
+# ============ FASE 3.3: Ejecución y evidencias (CUS-26 / CUS-29) ============
+class ActualizarEstadoRequest(BaseModel):
+    estado: str  # ENTREGADO | FALLIDO
+    motivo_fallo: Optional[str] = None
+
+    @field_validator("estado")
+    @classmethod
+    def validar_estado(cls, v: str) -> str:
+        permitidos = {"ENTREGADO", "FALLIDO"}
+        v = v.upper().strip()
+        if v not in permitidos:
+            raise ValueError(f"estado debe ser uno de {permitidos}")
+        return v
+
+
+class GestionParadaResponse(BaseModel):
+    pedido_id: int
+    numero_tracking: str
+    estado_entrega: str
+    motivo_fallo: Optional[str] = None
+    url_evidencia: Optional[str] = None
+    fecha_gestion: Optional[datetime] = None
+    mensaje: str
+
+
+# ============ FASE 3.4: Cierre de operación (CUS-28) ============
+class CierreRutaResponse(BaseModel):
+    ruta_id: int
+    nombre: str
+    estado: str
+    fecha_fin: Optional[datetime] = None
+    total_paradas: int
+    entregadas: int
+    fallidas: int
+    pendientes: int
+    mensaje: str

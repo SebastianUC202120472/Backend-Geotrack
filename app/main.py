@@ -1,8 +1,10 @@
 import asyncio
+import os
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.auth import router as auth_router  
 from app.db.database import engine, Base, SessionLocal 
 from app.models.usuario import Usuario 
@@ -12,6 +14,7 @@ from sqlalchemy import func
 from app.services.geocoder import obtener_coordenadas  
 from app.api.pedidos import router as pedidos_router
 from app.api.rutas import router as rutas_router  # <-- AÑADE ESTO
+from app.api.conductor import router as conductor_router  # Fase 3: App Móvil
 
 async def tarea_limpieza_usuarios():
     while True:
@@ -63,10 +66,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Servir las evidencias POD (CUS-29) como archivos estáticos en /media
+os.makedirs(os.path.join("uploads", "evidencias"), exist_ok=True)
+app.mount("/media", StaticFiles(directory="uploads"), name="media")
+
 app.include_router(auth_router, prefix="/api/auth", tags=["Autenticación"])
 app.include_router(pedidos_router, prefix="/api/pedidos", tags=["Gestión de Pedidos"])
-app.include_router(pedidos_router, prefix="/api/pedidos", tags=["Gestión de Pedidos"])
-app.include_router(rutas_router, prefix="/api/rutas", tags=["Enrutamiento y Flota"]) 
+app.include_router(rutas_router, prefix="/api/rutas", tags=["Enrutamiento y Flota"])
+app.include_router(conductor_router, prefix="/api/conductor", tags=["App Móvil - Conductor"])
 
 @app.get("/")
 def health_check():

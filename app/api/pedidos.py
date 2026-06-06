@@ -11,11 +11,12 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.pedido import Pedido
 # AQUÍ ESTÁ LA LÍNEA QUE FALTABA PARA QUE FUNCIONE LA GEOCODIFICACIÓN
-from app.services.geocoder import obtener_coordenadas 
+from app.services.geocoder import obtener_coordenadas
+from app.api.deps import get_current_admin
 
 router = APIRouter()
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(get_current_admin)])
 async def upload_pedidos(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.endswith('.xlsx'):
         raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx)")
@@ -55,13 +56,13 @@ async def upload_pedidos(file: UploadFile = File(...), db: Session = Depends(get
         raise HTTPException(status_code=500, detail=f"Error procesando el archivo: {str(e)}")
 
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(get_current_admin)])
 def listar_pedidos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     pedidos = db.query(Pedido).offset(skip).limit(limit).all()
     return pedidos
 
 
-@router.post("/geocodificar")
+@router.post("/geocodificar", dependencies=[Depends(get_current_admin)])
 def procesar_geocodificacion(db: Session = Depends(get_db)):
     pedidos_pendientes = db.query(Pedido).filter(Pedido.latitud == None).all()
     
@@ -98,7 +99,7 @@ def procesar_geocodificacion(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/zonas")
+@router.get("/zonas", dependencies=[Depends(get_current_admin)])
 def agrupar_pedidos_por_zona(db: Session = Depends(get_db)):
     resultados = db.query(
         Pedido.distrito,

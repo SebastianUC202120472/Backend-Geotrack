@@ -1,0 +1,271 @@
+# app/services/ruta_service.py
+# Lógica de negocio de la operación de última milla (Fase 3).
+import os
+from datetime import datetime
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.models.ruta import Ruta, RutaDetalle
+from app.models.pedido import Pedido
+from app.repositories import ruta_repository
+from app.schemas.ruta import (
+    RutaActivaResponse,
+    ManifiestoResponse,
+    ParadaManifiesto,
+    NavegacionResponse,
+    ParadaNavegacion,
+    ValidacionQRResponse,
+    GestionParadaResponse,
+    CierreRutaResponse,
+)
+
+# Carpeta donde se guardan las fotos POD (CUS-29). Servida en /media.
+DIR_EVIDENCIAS = os.path.join("uploads", "evidencias")
+EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _construir_parada(detalle: RutaDetalle, pedido: Pedido) -> ParadaManifiesto:
+    return ParadaManifiesto(
+        secuencia=detalle.secuencia,
+        detalle_id=detalle.id,
+        pedido_id=pedido.id,
+        numero_tracking=pedido.numero_tracking,
+        cliente_origen=pedido.cliente_origen,
+        direccion_destino=pedido.direccion_destino,
+        distrito=pedido.distrito,
+        latitud=pedido.latitud,
+        longitud=pedido.longitud,
+        peso_kg=pedido.peso_kg,
+        estado_entrega=detalle.estado_entrega,
+    )
+
+
+def _obtener_ruta_activa_o_404(db: Session, conductor_id: int) -> Ruta:
+    ruta = ruta_repository.obtener_ruta_activa_por_conductor(db, conductor_id)
+    if not ruta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No tienes una ruta activa asignada",
+        )
+    return ruta
+
+
+def obtener_resumen_ruta_activa(db: Session, conductor_id: int) -> RutaActivaResponse:
+    """CUS-21: resumen de la ruta activa con contadores de avance."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+    detalles = ruta_repository.obtener_detalles_con_pedido(db, ruta.id)
+
+    pendientes = sum(1 for d, _ in detalles if d.estado_entrega == "PENDIENTE")
+    entregadas = sum(1 for d, _ in detalles if d.estado_entrega == "ENTREGADO")
+    fallidas = sum(1 for d, _ in detalles if d.estado_entrega == "FALLIDO")
+
+    return RutaActivaResponse(
+        ruta_id=ruta.id,
+        nombre=ruta.nombre,
+        estado=ruta.estado,
+        fecha_creacion=ruta.fecha_creacion,
+        vehiculo_placa=ruta.vehiculo_placa,
+        total_paradas=len(detalles),
+        pendientes=pendientes,
+        entregadas=entregadas,
+        fallidas=fallidas,
+    )
+
+
+def obtener_manifiesto(db: Session, conductor_id: int) -> ManifiestoResponse:
+    """CUS-24: manifiesto detallado y ordenado por secuencia de entrega."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+    detalles = ruta_repository.obtener_detalles_con_pedido(db, ruta.id)
+
+    paradas = [_construir_parada(detalle, pedido) for detalle, pedido in detalles]
+
+    return ManifiestoResponse(
+        ruta_id=ruta.id,
+        nombre=ruta.nombre,
+        estado=ruta.estado,
+        total_paradas=len(paradas),
+        paradas=paradas,
+    )
+
+
+def obtener_navegacion(db: Session, conductor_id: int) -> NavegacionResponse:
+    """CUS-25: waypoints (lat/lng) ordenados para alimentar el mapa de la App."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+    detalles = ruta_repository.obtener_detalles_con_pedido(db, ruta.id)
+
+    paradas = [
+        ParadaNavegacion(
+            secuencia=detalle.secuencia,
+            pedido_id=pedido.id,
+            numero_tracking=pedido.numero_tracking,
+            latitud=pedido.latitud,
+            longitud=pedido.longitud,
+        )
+        for detalle, pedido in detalles
+        if pedido.latitud is not None and pedido.longitud is not None
+    ]
+
+    return NavegacionResponse(
+        ruta_id=ruta.id,
+        total_paradas=len(paradas),
+        paradas=paradas,
+    )
+
+
+# ============ FASE 3.2: Validación en almacén (CUS-22) ============
+def validar_paquete_qr(
+    db: Session, conductor_id: int, numero_tracking: str
+) -> ValidacionQRResponse:
+    """Verifica si el paquete escaneado pertenece a la ruta activa del conductor."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+
+    pedido = ruta_repository.obtener_pedido_por_tracking(db, numero_tracking)
+    if not pedido:
+        return ValidacionQRResponse(
+            pertenece=False,
+            mensaje=f"El paquete '{numero_tracking}' no existe en el sistema",
+        )
+
+    detalle = ruta_repository.obtener_detalle_de_ruta(db, ruta.id, pedido.id)
+    if not detalle:
+        return ValidacionQRResponse(
+            pertenece=False,
+            mensaje="Este paquete NO pertenece a tu ruta de hoy",
+        )
+
+    return ValidacionQRResponse(
+        pertenece=True,
+        mensaje="Paquete validado correctamente. Pertenece a tu ruta.",
+        parada=_construir_parada(detalle, pedido),
+    )
+
+
+# ============ FASE 3.3: Ejecución y evidencias (CUS-26 / CUS-29) ============
+def _obtener_detalle_de_mi_ruta(
+    db: Session, conductor_id: int, pedido_id: int
+) -> RutaDetalle:
+    """Recupera el detalle del pedido garantizando que pertenece a la ruta activa del conductor."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+    detalle = ruta_repository.obtener_detalle_de_ruta(db, ruta.id, pedido_id)
+    if not detalle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Este pedido no pertenece a tu ruta activa",
+        )
+    return detalle
+
+
+def actualizar_estado_parada(
+    db: Session,
+    conductor_id: int,
+    pedido_id: int,
+    estado: str,
+    motivo_fallo: str | None,
+) -> GestionParadaResponse:
+    """CUS-26: marca un pedido como ENTREGADO o FALLIDO."""
+    if estado == "FALLIDO" and not (motivo_fallo and motivo_fallo.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes indicar el motivo del fallo en una entrega fallida",
+        )
+
+    detalle = _obtener_detalle_de_mi_ruta(db, conductor_id, pedido_id)
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+
+    ahora = datetime.utcnow()
+    detalle.estado_entrega = estado
+    detalle.fecha_gestion = ahora
+    detalle.motivo_fallo = motivo_fallo if estado == "FALLIDO" else None
+
+    # Reflejamos el estado en el Pedido (trazabilidad para CUS-35)
+    pedido.estado = estado
+    pedido.fecha_entrega = ahora if estado == "ENTREGADO" else None
+
+    # La primera gestión arranca la ruta (CREADA -> EN_PROGRESO)
+    if detalle.ruta and detalle.ruta.estado == "CREADA":
+        detalle.ruta.estado = "EN_PROGRESO"
+
+    db.commit()
+    db.refresh(detalle)
+
+    return GestionParadaResponse(
+        pedido_id=pedido.id,
+        numero_tracking=pedido.numero_tracking,
+        estado_entrega=detalle.estado_entrega,
+        motivo_fallo=detalle.motivo_fallo,
+        url_evidencia=detalle.url_evidencia,
+        fecha_gestion=detalle.fecha_gestion,
+        mensaje=f"Pedido marcado como {estado}",
+    )
+
+
+def guardar_evidencia(
+    db: Session,
+    conductor_id: int,
+    pedido_id: int,
+    contenido: bytes,
+    nombre_archivo: str,
+) -> GestionParadaResponse:
+    """CUS-29: guarda la foto POD y la asocia al detalle de la ruta."""
+    detalle = _obtener_detalle_de_mi_ruta(db, conductor_id, pedido_id)
+
+    _, extension = os.path.splitext(nombre_archivo.lower())
+    if extension not in EXTENSIONES_IMAGEN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Formato no permitido. Usa: {', '.join(sorted(EXTENSIONES_IMAGEN))}",
+        )
+
+    os.makedirs(DIR_EVIDENCIAS, exist_ok=True)
+    nombre_final = f"pod_{detalle.ruta_id}_{pedido_id}{extension}"
+    ruta_fisica = os.path.join(DIR_EVIDENCIAS, nombre_final)
+    with open(ruta_fisica, "wb") as f:
+        f.write(contenido)
+
+    # URL pública servida por StaticFiles (montado en /media)
+    detalle.url_evidencia = f"/media/evidencias/{nombre_final}"
+    db.commit()
+    db.refresh(detalle)
+
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    return GestionParadaResponse(
+        pedido_id=pedido.id,
+        numero_tracking=pedido.numero_tracking,
+        estado_entrega=detalle.estado_entrega,
+        motivo_fallo=detalle.motivo_fallo,
+        url_evidencia=detalle.url_evidencia,
+        fecha_gestion=detalle.fecha_gestion,
+        mensaje="Evidencia (POD) cargada correctamente",
+    )
+
+
+# ============ FASE 3.4: Cierre de operación (CUS-28) ============
+def finalizar_ruta(db: Session, conductor_id: int) -> CierreRutaResponse:
+    """CUS-28: da por finalizada la ruta del día del conductor."""
+    ruta = _obtener_ruta_activa_o_404(db, conductor_id)
+    detalles = ruta_repository.obtener_detalles_con_pedido(db, ruta.id)
+
+    pendientes = sum(1 for d, _ in detalles if d.estado_entrega == "PENDIENTE")
+    entregadas = sum(1 for d, _ in detalles if d.estado_entrega == "ENTREGADO")
+    fallidas = sum(1 for d, _ in detalles if d.estado_entrega == "FALLIDO")
+
+    ruta.estado = "FINALIZADA"
+    ruta.fecha_fin = datetime.utcnow()
+    db.commit()
+
+    mensaje = "Ruta finalizada correctamente"
+    if pendientes:
+        mensaje += f" (quedaron {pendientes} paradas sin gestionar)"
+
+    return CierreRutaResponse(
+        ruta_id=ruta.id,
+        nombre=ruta.nombre,
+        estado=ruta.estado,
+        fecha_fin=ruta.fecha_fin,
+        total_paradas=len(detalles),
+        entregadas=entregadas,
+        fallidas=fallidas,
+        pendientes=pendientes,
+        mensaje=mensaje,
+    )

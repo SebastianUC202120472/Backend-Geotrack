@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from app.db.database import get_db
 from app.models.pedido import Pedido
 from app.models.ruta import Ruta, RutaDetalle
+from app.models.usuario import Usuario
 from app.services.router import optimizar_secuencia_pedidos
+from app.api.deps import get_current_admin, get_current_conductor
 
 router = APIRouter()
 
@@ -23,7 +25,7 @@ class SolicitudOptimizacion(BaseModel):
 
 
 # --- CUS-18: ADMINISTRADOR ASIGNA CARGA AL CONDUCTOR ---
-@router.post("/asignar-bloque")
+@router.post("/asignar-bloque", dependencies=[Depends(get_current_admin)])
 def administrador_asigna_bloque(asignacion: AsignacionBloque, db: Session = Depends(get_db)):
     # 1. Busca los pedidos PENDIENTES de ese distrito
     pedidos_zona = db.query(Pedido).filter(
@@ -51,11 +53,19 @@ def administrador_asigna_bloque(asignacion: AsignacionBloque, db: Session = Depe
 
 # --- CUS-19: CONDUCTOR OPTIMIZA SU RUTA DESDE LA APP MÓVIL ---
 @router.post("/conductor/optimizar")
-def conductor_optimiza_ruta(solicitud: SolicitudOptimizacion, db: Session = Depends(get_db)):
+def conductor_optimiza_ruta(
+    solicitud: SolicitudOptimizacion,
+    db: Session = Depends(get_db),
+    conductor: Usuario = Depends(get_current_conductor),
+):
     ruta = db.query(Ruta).filter(Ruta.id == solicitud.ruta_id).first()
     if not ruta:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
-    
+
+    # Seguridad: un conductor solo puede optimizar SU propia ruta
+    if ruta.conductor_id != conductor.id:
+        raise HTTPException(status_code=403, detail="Esta ruta no está asignada a tu usuario")
+
     # Obtenemos los pedidos usando los detalles
     pedidos_desordenados = []
     for detalle in ruta.detalles:
