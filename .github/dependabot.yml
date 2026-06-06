@@ -2,10 +2,13 @@
 # ============================================================================
 # Dependabot — Gestión automática de vulnerabilidades (OWASP A06)
 # ----------------------------------------------------------------------------
-# ¿QUÉ HACE?  GitHub revisa semanalmente tus dependencias y, si hay versiones
-#             nuevas o con fallos de seguridad, abre un Pull Request para
-#             actualizarlas automáticamente. También vigila las GitHub Actions.
-# ¿DÓNDE SE VE?  Repo -> pestaña "Security" -> Dependabot.
+# ¿QUÉ HACE?  GitHub revisa semanalmente tus dependencias y avisa (con un Pull
+#             Request) si hay versiones nuevas o con fallos de seguridad.
+# CONFIGURADO PARA MOLESTAR POCO:
+#   - 'groups': agrupa TODAS las actualizaciones en UN solo PR (no uno por cada una).
+#   - 'ignore' semver-major: NO propone saltos de versión MAYOR (ej. pandas 2.x -> 3.x),
+#     que suelen traer cambios que rompen. Solo propone parches/menores (seguros).
+# ¿DÓNDE SE VE?  Repo -> pestaña "Security" -> Dependabot, o en "Pull requests".
 # ============================================================================
 version: 2
 updates:
@@ -15,9 +18,18 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      dependencias-python:        # un único PR con todas las actualizaciones pip
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"      # no proponer versiones MAYORES (evita roturas)
+        update-types: ["version-update:semver-major"]
 
   # Versiones de las GitHub Actions usadas en el CI.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:             # un único PR con las actualizaciones de actions
+        patterns: ["*"]
