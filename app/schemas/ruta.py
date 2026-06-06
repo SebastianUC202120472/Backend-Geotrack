@@ -29,7 +29,9 @@ class ParadaManifiesto(BaseModel):
     detalle_id: int
     pedido_id: int
     numero_tracking: str
-    cliente_origen: str
+    cliente_origen: str  # empresa que envía (snapshot)
+    nombre_destinatario: Optional[str] = None    # persona que recibe
+    telefono_destinatario: Optional[str] = None  # para coordinar la entrega
     direccion_destino: str
     distrito: Optional[str] = None
     latitud: Optional[float] = None

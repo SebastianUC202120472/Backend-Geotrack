@@ -35,8 +35,25 @@ def registrar_usuario(db: Session, datos: UsuarioCreate) -> Usuario:
         )
 
     hash_contrasena = get_password_hash(datos.contrasena)
+    # datos.rol es un Enum (RolUsuario); guardamos su valor de texto ('admin'/'conductor').
     return usuario_repository.crear_usuario(
-        db, correo=datos.correo, hash_contrasena=hash_contrasena, rol=datos.rol
+        db, correo=datos.correo, hash_contrasena=hash_contrasena, rol=datos.rol.value
+    )
+
+
+def crear_admin_inicial(db: Session, correo: str, contrasena: str) -> None:
+    """
+    Crea un usuario admin "semilla" al arrancar SI no existe ya.
+    Esto resuelve el problema del huevo y la gallina: como el registro está
+    cerrado (solo admin), necesitamos un primer admin para poder entrar.
+    Sus credenciales vienen de variables de entorno (ADMIN_EMAIL/ADMIN_PASSWORD).
+    """
+    if not correo or not contrasena:
+        return
+    if usuario_repository.obtener_por_correo(db, correo):
+        return  # ya existe, no lo recreamos
+    usuario_repository.crear_usuario(
+        db, correo=correo, hash_contrasena=get_password_hash(contrasena), rol="admin"
     )
 
 

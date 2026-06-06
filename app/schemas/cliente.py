@@ -1,0 +1,28 @@
+# app/schemas/cliente.py
+# ============================================================================
+# CAPA: SCHEMA (validación/serialización con Pydantic) — Clean Architecture
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Moldes de entrada/salida del módulo de Clientes Corporativos.
+# ¿CON QUÉ SE CONECTA?
+#   - Lo USAN: api/clientes.py y services/cliente_service.py.
+# ============================================================================
+from typing import Optional
+from pydantic import BaseModel
+
+
+class ClienteCreate(BaseModel):
+    """ENTRADA: datos para registrar una empresa cliente."""
+    razon_social: str
+    identificador_unico: Optional[str] = None  # RUC
+    contacto: Optional[str] = None
+
+
+class ClienteResponse(BaseModel):
+    """SALIDA: datos de una empresa cliente."""
+    id: int
+    razon_social: str
+    identificador_unico: Optional[str] = None
+    contacto: Optional[str] = None
+
+    class Config:
+        from_attributes = True

@@ -48,10 +48,11 @@ class ResumenResponse(BaseModel):
 
 # ============ CUS-35: Historial / línea de tiempo de un paquete ============
 class EventoHistorial(BaseModel):
-    """Un punto en la línea de tiempo del paquete."""
-    evento: str            # nombre corto del hito (ej. "ENTREGADO")
-    descripcion: str       # explicación legible
-    fecha: Optional[datetime] = None  # cuándo ocurrió (si lo conocemos)
+    """Un punto en la línea de tiempo del paquete (fila de historial_pedidos)."""
+    evento: str                       # estado al que cambió (ej. "ENTREGADO")
+    descripcion: str                  # explicación legible
+    fecha: Optional[datetime] = None  # cuándo ocurrió
+    realizado_por: Optional[str] = None  # correo del usuario que hizo el cambio
 
 
 class HistorialPedidoResponse(BaseModel):

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.api.deps import get_current_admin
+from app.models.usuario import Usuario
 from app.services import pedido_service
 from app.schemas.pedido import (
     PedidoResponse,
@@ -32,11 +33,15 @@ from typing import List
 router = APIRouter()
 
 
-@router.post("/upload", response_model=CargaPedidosResponse, dependencies=[Depends(get_current_admin)])
-async def upload_pedidos(file: UploadFile = File(...), db: Session = Depends(get_db)):
+@router.post("/upload", response_model=CargaPedidosResponse)
+async def upload_pedidos(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(get_current_admin),
+):
     """Carga masiva de pedidos desde un Excel (CUS-13)."""
     contenido = await file.read()  # leemos el archivo subido (bytes)
-    return pedido_service.cargar_pedidos_excel(db, contenido, file.filename)
+    return pedido_service.cargar_pedidos_excel(db, contenido, file.filename, usuario_id=admin.id)
 
 
 @router.get("/", response_model=List[PedidoResponse], dependencies=[Depends(get_current_admin)])
@@ -45,10 +50,10 @@ def listar_pedidos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
     return pedido_service.listar_pedidos(db, skip=skip, limit=limit)
 
 
-@router.post("/geocodificar", response_model=GeocodificacionResponse, dependencies=[Depends(get_current_admin)])
-def procesar_geocodificacion(db: Session = Depends(get_db)):
+@router.post("/geocodificar", response_model=GeocodificacionResponse)
+def procesar_geocodificacion(db: Session = Depends(get_db), admin: Usuario = Depends(get_current_admin)):
     """Convierte las direcciones en coordenadas y deduce el distrito (CUS-15)."""
-    return pedido_service.procesar_geocodificacion(db)
+    return pedido_service.procesar_geocodificacion(db, usuario_id=admin.id)
 
 
 @router.get("/zonas", response_model=ZonasResponse, dependencies=[Depends(get_current_admin)])

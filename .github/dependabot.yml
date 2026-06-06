@@ -1,0 +1,23 @@
+# .github/dependabot.yml
+# ============================================================================
+# Dependabot — Gestión automática de vulnerabilidades (OWASP A06)
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  GitHub revisa semanalmente tus dependencias y, si hay versiones
+#             nuevas o con fallos de seguridad, abre un Pull Request para
+#             actualizarlas automáticamente. También vigila las GitHub Actions.
+# ¿DÓNDE SE VE?  Repo -> pestaña "Security" -> Dependabot.
+# ============================================================================
+version: 2
+updates:
+  # Dependencias de Python (lee requirements.txt).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Versiones de las GitHub Actions usadas en el CI.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -3,13 +3,15 @@
 # CAPA: SERVICIO (lógica de negocio) — Clean Architecture
 # ----------------------------------------------------------------------------
 # ¿QUÉ HACE?  La inteligencia del módulo Inbound:
-#               - CUS-13: leer el Excel y crear los pedidos (evitando duplicados).
+#               - CUS-13: leer el Excel, crear/enlazar el CLIENTE, guardar el
+#                 DESTINATARIO y registrar el primer evento de trazabilidad.
 #               - CUS-15: geocodificar (dirección -> latitud/longitud).
 #               - CUS-16: agrupar pedidos por distrito.
-# ¿CÓMO?      Usa pandas para el Excel y el repositorio para tocar la BD.
 # ¿CON QUÉ SE CONECTA?
-#   - repositories/pedido_repository.py -> lectura/escritura de pedidos.
-#   - services/geocoder.py              -> convierte direcciones en coordenadas.
+#   - repositories/pedido_repository.py    -> lectura/escritura de pedidos.
+#   - repositories/cliente_repository.py   -> crea/enlaza la empresa cliente.
+#   - repositories/historial_repository.py -> registra eventos (CUS-35).
+#   - services/geocoder.py                 -> coordenadas desde la dirección.
 #   - Lo USA: api/pedidos.py.
 # ============================================================================
 import io
@@ -18,57 +20,85 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.pedido import Pedido
-from app.repositories import pedido_repository
+from app.repositories import pedido_repository, cliente_repository, historial_repository
 from app.services.geocoder import obtener_coordenadas
 
-# Columnas mínimas que debe traer el Excel para poder procesarlo.
-COLUMNAS_REQUERIDAS = ["numero_tracking", "cliente_origen", "direccion_destino"]
+# Columnas mínimas que debe traer el Excel. El nombre del cliente puede venir
+# como 'razon_social_cliente' (recomendado) o como 'cliente_origen' (compatibilidad).
+COLUMNAS_REQUERIDAS = ["numero_tracking", "direccion_destino"]
 
 
-def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str) -> dict:
+def _valor(fila, df, *nombres):
+    """Devuelve el primer valor no vacío entre varias columnas posibles del Excel."""
+    for n in nombres:
+        if n in df.columns and pd.notna(fila.get(n)):
+            return fila[n]
+    return None
+
+
+def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str, usuario_id: int | None = None) -> dict:
     """
-    CUS-13: recibe el contenido de un Excel y crea los pedidos nuevos.
-    Pasos: validar extensión -> leer con pandas -> validar columnas ->
-           saltar los tracking ya existentes -> guardar en bloque.
+    CUS-13: crea los pedidos nuevos a partir del Excel.
+    Por cada fila: crea/enlaza el cliente, guarda destinatario y deja el primer
+    evento de trazabilidad (REGISTRADO).
     """
-    # 1) Validación de formato (antes del try, para que devuelva un 400 limpio).
+    # 1) Validación de formato (antes del try -> devuelve un 400 limpio).
     if not nombre_archivo.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx)")
 
-    # 2) Leer el Excel a un DataFrame de pandas.
+    # 2) Leer el Excel.
     try:
         df = pd.read_excel(io.BytesIO(contenido))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error leyendo el archivo: {e}")
 
-    # 3) Verificar que estén las columnas obligatorias.
+    # 3) Validar columnas obligatorias + que exista alguna columna con el cliente.
     if not all(col in df.columns for col in COLUMNAS_REQUERIDAS):
+        raise HTTPException(status_code=400, detail=f"El Excel debe contener: {COLUMNAS_REQUERIDAS}")
+    if "razon_social_cliente" not in df.columns and "cliente_origen" not in df.columns:
         raise HTTPException(
             status_code=400,
-            detail=f"El Excel debe contener las columnas: {COLUMNAS_REQUERIDAS}",
+            detail="El Excel debe incluir 'razon_social_cliente' (o 'cliente_origen').",
         )
 
-    # 4) Construir la lista de pedidos nuevos, ignorando los tracking repetidos.
+    # 4) Construir los pedidos nuevos.
     nuevos: list[Pedido] = []
     for _, fila in df.iterrows():
         tracking = str(fila["numero_tracking"])
         if pedido_repository.obtener_por_tracking(db, tracking):
-            continue  # ya existe -> no lo duplicamos
+            continue  # ya existe -> no duplicar
+
+        # Cliente (empresa que envía): se busca o se crea automáticamente.
+        razon = str(_valor(fila, df, "razon_social_cliente", "cliente_origen"))
+        ruc = _valor(fila, df, "ruc_cliente", "identificador_unico")
+        ruc = str(ruc) if ruc is not None else None
+        cliente = cliente_repository.buscar_o_crear(db, razon_social=razon, identificador_unico=ruc)
+
+        peso = _valor(fila, df, "peso_kg")
+        volumen = _valor(fila, df, "volumen_m3")
 
         nuevos.append(
             Pedido(
                 numero_tracking=tracking,
-                cliente_origen=str(fila["cliente_origen"]),
+                cliente_id=cliente.id,
+                cliente_origen=razon,  # snapshot del nombre del cliente
                 direccion_destino=str(fila["direccion_destino"]),
-                # peso/volumen son opcionales: si no vienen, ponemos 0.0
-                peso_kg=float(fila["peso_kg"]) if "peso_kg" in df.columns and pd.notna(fila["peso_kg"]) else 0.0,
-                volumen_m3=float(fila["volumen_m3"]) if "volumen_m3" in df.columns and pd.notna(fila["volumen_m3"]) else 0.0,
+                # Destinatario (persona que recibe), todos opcionales:
+                nombre_destinatario=_str_o_none(_valor(fila, df, "nombre_destinatario")),
+                telefono_destinatario=_str_o_none(_valor(fila, df, "telefono_destinatario")),
+                dni_destinatario=_str_o_none(_valor(fila, df, "dni_destinatario")),
+                peso_kg=float(peso) if peso is not None else 0.0,
+                volumen_m3=float(volumen) if volumen is not None else 0.0,
             )
         )
 
-    # 5) Guardar todos de una sola vez.
+    # 5) Guardar pedidos + su primer evento de historial (REGISTRADO).
     if nuevos:
-        pedido_repository.crear_pedidos(db, nuevos)
+        db.add_all(nuevos)
+        db.flush()  # asigna ids sin cerrar la transacción
+        for p in nuevos:
+            historial_repository.registrar(db, p.id, None, "PENDIENTE", usuario_id)
+        db.commit()
 
     return {
         "mensaje": "Carga masiva exitosa",
@@ -77,10 +107,15 @@ def cargar_pedidos_excel(db: Session, contenido: bytes, nombre_archivo: str) -> 
     }
 
 
-def procesar_geocodificacion(db: Session) -> dict:
+def _str_o_none(valor):
+    """Convierte a texto, o deja None si el valor es nulo."""
+    return str(valor) if valor is not None else None
+
+
+def procesar_geocodificacion(db: Session, usuario_id: int | None = None) -> dict:
     """
-    CUS-15: para cada pedido sin coordenadas, obtiene su latitud/longitud y
-    deduce el distrito a partir de la dirección. Marca como fallido si no se logra.
+    CUS-15: geocodifica los pedidos sin coordenadas. Si una dirección no se
+    encuentra, marca el pedido como fallido y lo registra en el historial.
     """
     pendientes = pedido_repository.obtener_sin_coordenadas(db)
     if not pendientes:
@@ -95,17 +130,16 @@ def procesar_geocodificacion(db: Session) -> dict:
         if lat and lng:
             pedido.latitud = lat
             pedido.longitud = lng
-
-            # Heurística simple: el distrito suele ser la 2ª parte de la dirección
-            # ("Av. X, San Miguel, Lima" -> "San Miguel").
             partes = pedido.direccion_destino.split(",")
             pedido.distrito = partes[1].strip() if len(partes) >= 2 else "ZONA_DESCONOCIDA"
             exitosos += 1
         else:
+            estado_anterior = pedido.estado
             pedido.estado = "GEOCODIFICACION_FALLIDA"
+            historial_repository.registrar(db, pedido.id, estado_anterior, "GEOCODIFICACION_FALLIDA", usuario_id)
             fallidos += 1
 
-    pedido_repository.guardar_cambios(db)  # confirma todos los cambios juntos
+    pedido_repository.guardar_cambios(db)
 
     return {
         "mensaje": "Proceso de geocodificación finalizado",

@@ -17,8 +17,13 @@ class PedidoResponse(BaseModel):
     """Molde de SALIDA de un pedido (todas sus columnas)."""
     id: int
     numero_tracking: str
-    cliente_origen: str
+    cliente_id: Optional[int] = None        # empresa que envía (FK a clientes_corporativos)
+    cliente_origen: str                     # nombre del cliente (snapshot)
     direccion_destino: str
+    # Datos del destinatario (quién recibe) — Fase 4
+    nombre_destinatario: Optional[str] = None
+    telefono_destinatario: Optional[str] = None
+    dni_destinatario: Optional[str] = None
     distrito: Optional[str] = None
     latitud: Optional[float] = None
     longitud: Optional[float] = None

@@ -50,3 +50,36 @@ jobs:
       # 5) Ejecuta la batería de pruebas.
       - name: Ejecutar pruebas (pytest)
         run: pytest -q
+
+  # ==========================================================================
+  # Job de SEGURIDAD: análisis estático del código + vulnerabilidades de deps.
+  # ==========================================================================
+  seguridad:
+    name: Análisis de seguridad (bandit + pip-audit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias + herramientas de seguridad
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit pip-audit
+
+      # Bandit: busca patrones inseguros en NUESTRO código (OWASP).
+      - name: Bandit (análisis estático del código)
+        run: bandit -r app --severity-level medium --confidence-level medium
+
+      # pip-audit: busca CVEs conocidos en las dependencias (informativo: no
+      # bloquea el build, pero deja el reporte para revisarlo).
+      - name: pip-audit (vulnerabilidades en dependencias)
+        run: pip-audit
+        continue-on-error: true

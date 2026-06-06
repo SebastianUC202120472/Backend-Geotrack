@@ -15,9 +15,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# URL de conexión al contenedor de PostgreSQL.
+from app.core.config import settings
+
+# URL de conexión a PostgreSQL. Ahora viene de la configuración central
+# (variable de entorno DATABASE_URL), NO escrita en el código.
 # El host 'db' es el NOMBRE DEL SERVICIO en docker-compose.yml (red interna de Docker).
-SQLALCHEMY_DATABASE_URL = "postgresql://sava_admin:sava_password123@db:5432/siol_sava_db"
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
 # Motor: traduce el código Python a SQL y mantiene la conexión.
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

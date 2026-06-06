@@ -10,14 +10,22 @@
 # ¿CON QUÉ SE CONECTA?
 #   - Lo USAN: api/auth.py y services/usuario_service.py.
 # ============================================================================
+from enum import Enum
 from pydantic import BaseModel, EmailStr
+
+
+class RolUsuario(str, Enum):
+    """Roles válidos del sistema. Pydantic RECHAZA (422) cualquier otro valor,
+    evitando que se cuelen roles inventados (seguridad / mínimo privilegio)."""
+    ADMIN = "admin"
+    CONDUCTOR = "conductor"
 
 
 class UsuarioCreate(BaseModel):
     """Molde de ENTRADA: lo que el cliente envía para crear un usuario."""
-    correo: EmailStr   # EmailStr valida que tenga formato de correo válido
+    correo: EmailStr        # EmailStr valida que tenga formato de correo válido
     contrasena: str
-    rol: str           # debe ser 'admin' o 'conductor'
+    rol: RolUsuario         # solo se acepta 'admin' o 'conductor'
 
 
 class UsuarioResponse(BaseModel):

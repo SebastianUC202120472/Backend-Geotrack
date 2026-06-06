@@ -22,9 +22,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal
 # Importar los modelos registra sus tablas en Base.metadata (necesario para create_all).
 from app.models import Usuario, Pedido, Ruta, RutaDetalle
+from app.services import usuario_service
 
 # Routers (cada uno agrupa los endpoints de un módulo).
 from app.api.auth import router as auth_router
@@ -32,6 +34,7 @@ from app.api.pedidos import router as pedidos_router
 from app.api.rutas import router as rutas_router
 from app.api.conductor import router as conductor_router
 from app.api.dashboard import router as dashboard_router  # Fase 4: trazabilidad
+from app.api.clientes import router as clientes_router    # Fase 4: clientes corporativos
 
 
 async def tarea_limpieza_usuarios():
@@ -72,6 +75,17 @@ async def lifespan(app: FastAPI):
     print("Creando tablas en la base de datos...")
     Base.metadata.create_all(bind=engine)
 
+    # Crea el admin inicial si no existe (para poder entrar, ya que el registro
+    # está restringido a admins). Sus credenciales vienen de variables de entorno.
+    db = SessionLocal()
+    try:
+        usuario_service.crear_admin_inicial(db, settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD)
+        print(f"Admin inicial asegurado: {settings.ADMIN_EMAIL}")
+    except Exception as e:
+        print(f"No se pudo crear el admin inicial: {e}")
+    finally:
+        db.close()
+
     # Arranca la limpieza periódica en segundo plano.
     print("Iniciando tarea de limpieza en segundo plano...")
     tarea_background = asyncio.create_task(tarea_limpieza_usuarios())
@@ -89,12 +103,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS: permite que clientes de otros orígenes (Web/App) consuman la API.
-# Para el MVP permitimos todo ("*"); en producción se debe restringir.
+# CORS: permite que el frontend (otro origen) consuma la API.
+# Los orígenes vienen de la config (CORS_ORIGINS). allow_credentials=False porque
+# usamos JWT en el header Authorization (no cookies): así '*' sigue siendo válido
+# y NO complica al frontend, evitando el combo inseguro '*' + credentials=True.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,6 +121,7 @@ app.mount("/media", StaticFiles(directory="uploads"), name="media")
 
 # Registro de routers. Cada 'prefix' es la base de las URLs de ese módulo.
 app.include_router(auth_router, prefix="/api/auth", tags=["Autenticación"])
+app.include_router(clientes_router, prefix="/api/clientes", tags=["Clientes Corporativos"])
 app.include_router(pedidos_router, prefix="/api/pedidos", tags=["Gestión de Pedidos"])
 app.include_router(rutas_router, prefix="/api/rutas", tags=["Enrutamiento y Flota"])
 app.include_router(conductor_router, prefix="/api/conductor", tags=["App Móvil - Conductor"])

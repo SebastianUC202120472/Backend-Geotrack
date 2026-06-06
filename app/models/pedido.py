@@ -10,7 +10,7 @@
 #   - Se vincula a una ruta a través de 'ruta_detalles' (ver models/ruta.py).
 # ============================================================================
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from app.db.database import Base
 
 
@@ -19,8 +19,20 @@ class Pedido(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero_tracking = Column(String(50), unique=True, index=True, nullable=False)  # código único (se lee por QR)
-    cliente_origen = Column(String(100), nullable=False)   # quién envía el paquete
+
+    # --- Cliente que ENVÍA (empresa) ---
+    # cliente_id enlaza a la entidad real 'clientes_corporativos' (Fase 4).
+    cliente_id = Column(Integer, ForeignKey("clientes_corporativos.id"), nullable=True, index=True)
+    # cliente_origen se mantiene como "foto" del nombre del cliente al momento de
+    # la carga (dato denormalizado, cómodo para listados y el manifiesto).
+    cliente_origen = Column(String(100), nullable=False)
+
     direccion_destino = Column(String(255), nullable=False)  # a dónde se entrega
+
+    # --- Destinatario que RECIBE (persona) — Fase 4 / trazabilidad ---
+    nombre_destinatario = Column(String(120), nullable=True)
+    telefono_destinatario = Column(String(30), nullable=True)
+    dni_destinatario = Column(String(20), nullable=True)  # para verificar identidad en la entrega
     distrito = Column(String(100), nullable=True)   # se rellena al geocodificar (CUS-16)
     latitud = Column(Float, nullable=True)          # coordenada (CUS-15)
     longitud = Column(Float, nullable=True)         # coordenada (CUS-15)

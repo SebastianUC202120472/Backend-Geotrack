@@ -4,5 +4,7 @@
 #   - create_all (app/main.py) para crear las tablas al arrancar.
 #   - Alembic (alembic/env.py) para detectar cambios y generar migraciones.
 from .usuario import Usuario
+from .cliente import ClienteCorporativo
 from .pedido import Pedido
 from .ruta import Ruta, RutaDetalle
+from .historial import HistorialPedido

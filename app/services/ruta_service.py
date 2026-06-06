@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ruta import Ruta, RutaDetalle
 from app.models.pedido import Pedido
-from app.repositories import ruta_repository, pedido_repository
+from app.repositories import ruta_repository, pedido_repository, historial_repository
 from app.services.router import optimizar_secuencia_pedidos
 from app.schemas.ruta import (
     RutaActivaResponse,
@@ -50,6 +50,9 @@ def _construir_parada(detalle: RutaDetalle, pedido: Pedido) -> ParadaManifiesto:
         pedido_id=pedido.id,
         numero_tracking=pedido.numero_tracking,
         cliente_origen=pedido.cliente_origen,
+        # Datos del destinatario: el conductor necesita saber a QUIÉN entrega.
+        nombre_destinatario=pedido.nombre_destinatario,
+        telefono_destinatario=pedido.telefono_destinatario,
         direccion_destino=pedido.direccion_destino,
         distrito=pedido.distrito,
         latitud=pedido.latitud,
@@ -192,6 +195,7 @@ def actualizar_estado_parada(
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
 
     ahora = datetime.utcnow()
+    estado_anterior = pedido.estado
     detalle.estado_entrega = estado
     detalle.fecha_gestion = ahora
     detalle.motivo_fallo = motivo_fallo if estado == "FALLIDO" else None
@@ -203,6 +207,9 @@ def actualizar_estado_parada(
     # La primera gestión arranca la ruta (CREADA -> EN_PROGRESO)
     if detalle.ruta and detalle.ruta.estado == "CREADA":
         detalle.ruta.estado = "EN_PROGRESO"
+
+    # Registramos el evento en el historial (quién = el conductor).
+    historial_repository.registrar(db, pedido.id, estado_anterior, estado, conductor_id)
 
     db.commit()
     db.refresh(detalle)
@@ -290,12 +297,13 @@ def finalizar_ruta(db: Session, conductor_id: int) -> CierreRutaResponse:
 
 
 # ============ FASE 2: Enrutamiento básico (CUS-18) ============
-def asignar_bloque(db: Session, datos: AsignacionBloqueRequest) -> dict:
+def asignar_bloque(db: Session, datos: AsignacionBloqueRequest, usuario_id: int | None = None) -> dict:
     """
     CUS-18: el admin crea una ruta para un conductor con TODOS los pedidos
     PENDIENTES de un distrito.
     Pasos: buscar pedidos -> crear la ruta -> colgar cada pedido como detalle
-           (secuencia=0, aún sin optimizar) -> marcar pedidos como 'ASIGNADO'.
+           (secuencia=0, aún sin optimizar) -> marcar pedidos como 'ASIGNADO'
+           -> registrar el evento en el historial.
     """
     pedidos = pedido_repository.obtener_pendientes_por_distrito(db, datos.distrito)
     if not pedidos:
@@ -305,7 +313,9 @@ def asignar_bloque(db: Session, datos: AsignacionBloqueRequest) -> dict:
 
     for pedido in pedidos:
         ruta_repository.agregar_detalle(db, ruta_id=ruta.id, pedido_id=pedido.id, secuencia=0)
+        estado_anterior = pedido.estado
         pedido.estado = "ASIGNADO"
+        historial_repository.registrar(db, pedido.id, estado_anterior, "ASIGNADO", usuario_id)
 
     ruta_repository.guardar_cambios(db)
 
@@ -347,7 +357,9 @@ def optimizar_ruta(db: Session, datos: OptimizacionRequest, conductor_id: int) -
     for pedido in ordenados:
         detalle = ruta_repository.obtener_detalle_de_ruta(db, ruta.id, pedido.id)
         detalle.secuencia = secuencia
+        estado_anterior = pedido.estado
         pedido.estado = "EN_RUTA"
+        historial_repository.registrar(db, pedido.id, estado_anterior, "EN_RUTA", conductor_id)
         secuencia += 1
 
     ruta_repository.guardar_cambios(db)

@@ -14,18 +14,17 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import jwt
 
+from app.core.config import settings
+
 # Contexto de encriptación. Usamos Argon2: estándar moderno y robusto,
 # sin problemas de compilación en Windows/Docker.
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# --- Parámetros del token JWT ---
-# IMPORTANTE: en producción SECRET_KEY debería leerse de una variable de
-# entorno (.env), nunca quedar fija en el código. Para el MVP la dejamos aquí.
-SECRET_KEY = "tu_clave_super_secreta_aqui_para_el_mvp"
-ALGORITHM = "HS256"                 # algoritmo de firma del token
-# Duración del token. 480 min = 8 horas: cómodo para pruebas/demo de la tesis.
-# En PRODUCCIÓN debería ser corto (ej. 30-60 min) por seguridad.
-ACCESS_TOKEN_EXPIRE_MINUTES = 480
+# --- Parámetros del token JWT (vienen de variables de entorno via config.py) ---
+# Ya NO hay secretos en el código: se leen de la configuración central.
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 def get_password_hash(password: str) -> str:

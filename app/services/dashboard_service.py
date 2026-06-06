@@ -16,7 +16,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.repositories import ruta_repository, pedido_repository, usuario_repository
+from app.repositories import ruta_repository, pedido_repository, usuario_repository, historial_repository
 from app.schemas.dashboard import (
     RutaFlota,
     FlotaResponse,
@@ -26,6 +26,16 @@ from app.schemas.dashboard import (
 )
 
 ESTADOS_RUTA_ACTIVA = ("CREADA", "EN_PROGRESO")
+
+# Texto legible para cada estado, usado en la línea de tiempo (CUS-35).
+DESCRIPCIONES_ESTADO = {
+    "PENDIENTE": "El pedido ingresó al sistema (carga de Excel).",
+    "GEOCODIFICACION_FALLIDA": "No se pudo ubicar la dirección en el mapa.",
+    "ASIGNADO": "Asignado a una ruta de reparto.",
+    "EN_RUTA": "En camino: el conductor optimizó la secuencia de entrega.",
+    "ENTREGADO": "Paquete entregado al destinatario.",
+    "FALLIDO": "Entrega fallida.",
+}
 
 
 def _contar_estados(detalles) -> tuple[int, int, int]:
@@ -104,10 +114,9 @@ def obtener_resumen(db: Session) -> ResumenResponse:
 # ============ CUS-35: Historial / línea de tiempo de un paquete ============
 def obtener_historial(db: Session, numero_tracking: str) -> HistorialPedidoResponse:
     """
-    Reconstruye la línea de tiempo de un paquete con los datos disponibles
-    (creación, asignación a ruta, optimización y entrega/fallo).
-    NOTA: se reconstruye desde el estado actual; un registro de eventos
-    dedicado sería una mejora futura.
+    CUS-35: línea de tiempo REAL de un paquete, leída de la tabla
+    'historial_pedidos' (cada cambio de estado quedó registrado con su fecha y
+    el usuario que lo hizo). Se complementa con datos de la ruta y la evidencia.
     """
     pedido = pedido_repository.obtener_por_tracking(db, numero_tracking)
     if not pedido:
@@ -116,24 +125,27 @@ def obtener_historial(db: Session, numero_tracking: str) -> HistorialPedidoRespo
             detail=f"No existe un pedido con tracking '{numero_tracking}'",
         )
 
+    # Eventos reales registrados, en orden cronológico.
+    registros = historial_repository.listar_por_pedido(db, pedido.id)
+    cache_correos: dict[int, str] = {}
+
     eventos: list[EventoHistorial] = []
+    for r in registros:
+        correo = None
+        if r.usuario_id:
+            if r.usuario_id not in cache_correos:
+                u = usuario_repository.obtener_por_id(db, r.usuario_id)
+                cache_correos[r.usuario_id] = u.correo if u else None
+            correo = cache_correos[r.usuario_id]
 
-    # 1) Siempre: el pedido fue registrado.
-    eventos.append(EventoHistorial(
-        evento="REGISTRADO",
-        descripcion="El pedido ingresó al sistema (carga de Excel).",
-        fecha=pedido.fecha_creacion,
-    ))
-
-    # 2) Geocodificación (si ya tiene coordenadas).
-    if pedido.latitud is not None and pedido.longitud is not None:
         eventos.append(EventoHistorial(
-            evento="GEOCODIFICADO",
-            descripcion=f"Ubicado en el distrito '{pedido.distrito}'.",
-            fecha=None,  # no guardamos la hora exacta de geocodificación
+            evento=r.estado_nuevo,
+            descripcion=DESCRIPCIONES_ESTADO.get(r.estado_nuevo, "Cambio de estado."),
+            fecha=r.fecha_utc,
+            realizado_por=correo,
         ))
 
-    # 3) Si está en una ruta, añadimos asignación / en ruta / cierre.
+    # Datos complementarios desde la ruta/detalle (evidencia, motivo, parada).
     ruta_nombre = None
     secuencia = None
     url_evidencia = None
@@ -146,34 +158,6 @@ def obtener_historial(db: Session, numero_tracking: str) -> HistorialPedidoRespo
         secuencia = detalle.secuencia
         url_evidencia = detalle.url_evidencia
         motivo_fallo = detalle.motivo_fallo
-
-        eventos.append(EventoHistorial(
-            evento="ASIGNADO",
-            descripcion=f"Asignado a la ruta '{ruta.nombre}'.",
-            fecha=ruta.fecha_creacion,
-        ))
-
-        if detalle.secuencia and detalle.secuencia > 0:
-            eventos.append(EventoHistorial(
-                evento="EN_RUTA",
-                descripcion=f"Programado como parada N° {detalle.secuencia} de la ruta.",
-                fecha=None,
-            ))
-
-        # Entrega o fallo (evento final, si ya se gestionó).
-        if detalle.estado_entrega == "ENTREGADO":
-            eventos.append(EventoHistorial(
-                evento="ENTREGADO",
-                descripcion="Paquete entregado al cliente. Evidencia (POD) registrada."
-                            if detalle.url_evidencia else "Paquete entregado al cliente.",
-                fecha=detalle.fecha_gestion,
-            ))
-        elif detalle.estado_entrega == "FALLIDO":
-            eventos.append(EventoHistorial(
-                evento="FALLIDO",
-                descripcion=f"Entrega fallida. Motivo: {detalle.motivo_fallo or 'no especificado'}.",
-                fecha=detalle.fecha_gestion,
-            ))
 
     return HistorialPedidoResponse(
         numero_tracking=pedido.numero_tracking,

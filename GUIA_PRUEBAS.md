@@ -64,6 +64,13 @@ y **NO** muestra la contraseña.
 - "Try it out" → en `file` selecciona **`datos_prueba/pedidos_demo.xlsx`** → Execute.
 - ✅ Esperado: `{ "mensaje": "Carga masiva exitosa", "pedidos_nuevos": 5, "total_filas_leidas": 5 }`.
 - 💡 Si lo subes 2 veces, `pedidos_nuevos` será 0 (no duplica por `numero_tracking`).
+- 📋 El Excel ahora trae: `numero_tracking`, `razon_social_cliente`, `ruc_cliente`,
+  `direccion_destino`, `nombre_destinatario`, `telefono_destinatario`, `dni_destinatario`,
+  `peso_kg`, `volumen_m3`. Al cargar, **los clientes se crean solos** y se enlazan al pedido.
+
+### 2.1b Ver clientes — `GET /api/clientes/` (Fase 4)
+- ✅ Esperado: las empresas cliente creadas desde el Excel (con su RUC).
+- 💡 También puedes registrar un cliente a mano con `POST /api/clientes/`.
 
 ### 2.2 Ver los pedidos — `GET /api/pedidos/`
 - ✅ Esperado: lista con 5 pedidos en estado `PENDIENTE`, sin coordenadas todavía.
@@ -199,9 +206,12 @@ funcionan de punta a punta.**
 
 ### 4.3 Historial de un paquete — `GET /api/dashboard/pedidos/{tracking}/historial` (CUS-35)
 - Pon un tracking que ya gestionaste (ej. `TRK-001`).
-- ✅ Esperado: la línea de tiempo (`eventos`) en orden:
-  `REGISTRADO → GEOCODIFICADO → ASIGNADO → EN_RUTA → ENTREGADO/FALLIDO`,
-  con fechas, ruta, secuencia y la `url_evidencia` si subiste foto.
+- ✅ Esperado: la línea de tiempo **real** (`eventos`, leída de `historial_pedidos`):
+  `PENDIENTE → ASIGNADO → EN_RUTA → ENTREGADO/FALLIDO`, cada evento con su
+  **fecha** y el **`realizado_por`** (correo de quién lo hizo: admin o conductor),
+  más la ruta, secuencia y la `url_evidencia` si subiste foto.
+- 💡 Esto es trazabilidad real: si un pedido pasa por varios estados, verás
+  **todos** los pasos, no solo el último.
 
 ---
 

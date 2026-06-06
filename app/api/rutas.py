@@ -30,14 +30,14 @@ from app.schemas.ruta import (
 router = APIRouter()
 
 
-@router.post(
-    "/asignar-bloque",
-    response_model=AsignacionBloqueResponse,
-    dependencies=[Depends(get_current_admin)],
-)
-def administrador_asigna_bloque(asignacion: AsignacionBloqueRequest, db: Session = Depends(get_db)):
+@router.post("/asignar-bloque", response_model=AsignacionBloqueResponse)
+def administrador_asigna_bloque(
+    asignacion: AsignacionBloqueRequest,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(get_current_admin),
+):
     """CUS-18: el administrador asigna un bloque de pedidos de un distrito a un conductor."""
-    return ruta_service.asignar_bloque(db, asignacion)
+    return ruta_service.asignar_bloque(db, asignacion, usuario_id=admin.id)
 
 
 @router.post("/conductor/optimizar", response_model=OptimizacionResponse)
