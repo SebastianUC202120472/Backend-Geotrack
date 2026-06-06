@@ -27,7 +27,7 @@ jobs:
     steps:
       # 1) Descarga el código del repositorio en la máquina de GitHub.
       - name: Clonar el repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # 2) Instala Python 3.11 (la misma versión del Dockerfile).
       - name: Configurar Python 3.11
@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Clonar el repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
