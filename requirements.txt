@@ -13,5 +13,5 @@ python-multipart==0.0.9
 pydantic-settings==2.2.1
 email-validator==2.3.0
 pandas==2.2.1
-openpyxl==3.1.2
+openpyxl==3.1.5
 geopy==2.4.1
