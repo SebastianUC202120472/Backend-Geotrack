@@ -59,3 +59,18 @@ def agrupar_por_zona(db: Session):
 def guardar_cambios(db: Session) -> None:
     """Confirma en la BD los cambios hechos sobre pedidos ya cargados (UPDATE)."""
     db.commit()
+
+
+# --- Fase 4: trazabilidad (CUS-33 / CUS-35) ---
+def contar_total(db: Session) -> int:
+    """Número total de pedidos en el sistema."""
+    return db.query(func.count(Pedido.id)).scalar() or 0
+
+
+def contar_por_estado(db: Session):
+    """Cuenta los pedidos agrupados por su estado (para los KPIs del dashboard)."""
+    return (
+        db.query(Pedido.estado, func.count(Pedido.id).label("total"))
+        .group_by(Pedido.estado)
+        .all()
+    )

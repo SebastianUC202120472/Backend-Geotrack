@@ -1,0 +1,52 @@
+# .github/workflows/ci.yml
+# ============================================================================
+# CI/CD — Integración Continua con GitHub Actions (Fase 4.3)
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Cada vez que haces "push" o abres un Pull Request hacia develop o
+#             main, GitHub ejecuta automáticamente este flujo: instala las
+#             dependencias y corre las pruebas. Si algo falla, te avisa con una
+#             X roja ANTES de que el código roto llegue a la rama.
+# ¿CON QUÉ SE CONECTA?
+#   - requirements.txt -> dependencias del proyecto.
+#   - tests/           -> las pruebas que validan el código (pytest).
+# ============================================================================
+name: CI - SIOL-SAVA Backend
+
+# Cuándo se dispara este flujo.
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  pruebas:
+    name: Instalar y testear FastAPI
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Descarga el código del repositorio en la máquina de GitHub.
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      # 2) Instala Python 3.11 (la misma versión del Dockerfile).
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # 3) Instala las dependencias del proyecto + pytest (solo para pruebas).
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      # 4) Sanity check: confirma que la app de FastAPI importa sin errores.
+      - name: Verificar que la app arranca (import)
+        run: python -c "import app.main; print('App SIOL-SAVA importada correctamente')"
+
+      # 5) Ejecuta la batería de pruebas.
+      - name: Ejecutar pruebas (pytest)
+        run: pytest -q

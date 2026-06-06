@@ -21,6 +21,11 @@ def obtener_por_correo(db: Session, correo: str) -> Optional[Usuario]:
     return db.query(Usuario).filter(Usuario.correo == correo).first()
 
 
+def obtener_por_id(db: Session, usuario_id: int) -> Optional[Usuario]:
+    """Busca un usuario por su id (lo usa el dashboard para mostrar al conductor)."""
+    return db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+
 def crear_usuario(db: Session, correo: str, hash_contrasena: str, rol: str) -> Usuario:
     """
     Inserta un usuario nuevo en la base de datos.

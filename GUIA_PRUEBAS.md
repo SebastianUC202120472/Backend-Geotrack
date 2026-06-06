@@ -181,3 +181,38 @@ Authorize(admin)
 
 ✔️ Si completas este recorrido sin errores rojos, **las 4 fases del backend
 funcionan de punta a punta.**
+
+---
+
+## 📊 4. FLUJO ADMIN — Trazabilidad (Fase 4)
+
+> Vuelve a **Authorize** como `admin@siol.com`. Estos endpoints son del panel web.
+
+### 4.1 KPIs globales — `GET /api/dashboard/resumen` (CUS-33)
+- ✅ Esperado: `total_pedidos`, `pedidos_por_estado` (ej. `{"ENTREGADO":1,"FALLIDO":1,...}`),
+  `rutas_activas`, `rutas_finalizadas`.
+
+### 4.2 Estado de la flota — `GET /api/dashboard/flota` (CUS-33)
+- ✅ Esperado: lista de rutas con su `avance_porcentaje`, conteo de
+  entregadas/fallidas/pendientes y el correo del conductor.
+- 💡 Si cerraste la ruta antes, la verás como `FINALIZADA` con su `fecha_fin`.
+
+### 4.3 Historial de un paquete — `GET /api/dashboard/pedidos/{tracking}/historial` (CUS-35)
+- Pon un tracking que ya gestionaste (ej. `TRK-001`).
+- ✅ Esperado: la línea de tiempo (`eventos`) en orden:
+  `REGISTRADO → GEOCODIFICADO → ASIGNADO → EN_RUTA → ENTREGADO/FALLIDO`,
+  con fechas, ruta, secuencia y la `url_evidencia` si subiste foto.
+
+---
+
+## ⚙️ 5. CI/CD (Fase 4.3) — GitHub Actions
+
+No se prueba en Swagger; se prueba **subiendo código a GitHub**:
+1. Haz `git push` a la rama `develop` (o abre un Pull Request).
+2. Entra a tu repo en GitHub → pestaña **"Actions"**.
+3. Verás el flujo **"CI - SIOL-SAVA Backend"** corriendo: instala dependencias,
+   importa la app y ejecuta `pytest`.
+4. ✅ Check verde = el código corre correctamente. ❌ X roja = algo se rompió
+   (haz clic para ver el log).
+
+> 💡 Para correr las mismas pruebas en tu PC: `pytest -q` (necesitas `pip install pytest`).

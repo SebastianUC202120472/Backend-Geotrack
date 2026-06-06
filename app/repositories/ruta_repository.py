@@ -95,3 +95,25 @@ def agregar_detalle(db: Session, ruta_id: int, pedido_id: int, secuencia: int = 
 def guardar_cambios(db: Session) -> None:
     """Confirma en PostgreSQL todos los cambios pendientes de la transacción."""
     db.commit()
+
+
+# --- Fase 4: trazabilidad y seguimiento (CUS-33 / CUS-35) ---
+def listar_rutas(db: Session) -> List[Ruta]:
+    """Devuelve TODAS las rutas (para el dashboard de flota), las más nuevas primero."""
+    return db.query(Ruta).order_by(Ruta.fecha_creacion.desc()).all()
+
+
+def obtener_detalle_y_ruta_por_pedido(
+    db: Session, pedido_id: int
+) -> Optional[Tuple[RutaDetalle, Ruta]]:
+    """
+    Para el historial de un paquete (CUS-35): devuelve el detalle de ruta de un
+    pedido junto con la ruta a la que pertenece. None si el pedido no está en
+    ninguna ruta todavía.
+    """
+    return (
+        db.query(RutaDetalle, Ruta)
+        .join(Ruta, RutaDetalle.ruta_id == Ruta.id)
+        .filter(RutaDetalle.pedido_id == pedido_id)
+        .first()
+    )
