@@ -1,45 +1,47 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+# app/api/auth.py
+# ============================================================================
+# CAPA: API / ROUTER (puerta de entrada HTTP) — Clean Architecture
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Expone las URLs de autenticación que consumen la Web y la App:
+#               POST /api/auth/registro -> crear cuenta (CUS-01)
+#               POST /api/auth/login    -> iniciar sesión y recibir el JWT (CUS-02)
+# ¿CÓMO?      Son funciones "delgadas": reciben la petición, llaman al SERVICIO
+#             y devuelven la respuesta. NO contienen lógica de negocio.
+# ¿CON QUÉ SE CONECTA?
+#   - services/usuario_service.py -> donde está la lógica real.
+#   - schemas/usuario.py          -> moldes de entrada/salida (validación).
+#   - db/database.py (get_db)     -> inyecta la sesión de base de datos.
+#   - Lo registra: main.py con el prefijo /api/auth.
+# ============================================================================
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token
-from app.core.security import get_password_hash, verify_password, create_access_token
 
+from app.db.database import get_db
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token
+from app.services import usuario_service
 
 router = APIRouter()
 
+
 @router.post("/registro", response_model=UsuarioResponse)
 def registrar_usuario(usuario: UsuarioCreate, db: Session = Depends(get_db)):
-    # 1. Verificar si el correo ya existe en la base de datos
-    db_user = db.query(Usuario).filter(Usuario.correo == usuario.correo).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+    """
+    Registra un usuario nuevo (CUS-01).
+    NOTA DE SEGURIDAD: hoy está abierto para facilitar el MVP. En producción
+    debería exigir rol 'admin' (añadiendo Depends(get_current_admin)).
+    """
+    return usuario_service.registrar_usuario(db, usuario)
 
-    # 2. Crear el usuario encriptando su contraseña
-    nuevo_usuario = Usuario(
-        correo=usuario.correo,
-        hash_contrasena=get_password_hash(usuario.contrasena),
-        rol=usuario.rol
-    )
-    db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)
-    return nuevo_usuario
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 1. Buscar al usuario por correo (username)
-    usuario = db.query(Usuario).filter(Usuario.correo == form_data.username).first()
-    
-    # 2. Verificar que exista y que la contraseña sea correcta
-    if not usuario or not verify_password(form_data.password, usuario.hash_contrasena):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrectos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # 3. Generar el Token JWT que usará el Frontend y la App Móvil
-    access_token = create_access_token(data={"sub": usuario.correo, "rol": usuario.rol})
+    """
+    Inicia sesión (CUS-02) y devuelve el token JWT.
+    Usa OAuth2PasswordRequestForm: el cliente envía 'username' (=correo) y
+    'password'. Es lo que rellena el botón "Authorize" de Swagger.
+    """
+    access_token = usuario_service.autenticar_y_generar_token(
+        db, correo=form_data.username, contrasena=form_data.password
+    )
     return {"access_token": access_token, "token_type": "bearer"}

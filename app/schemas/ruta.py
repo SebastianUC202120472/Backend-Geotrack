@@ -1,5 +1,14 @@
 # app/schemas/ruta.py
-# Esquemas Pydantic de respuesta para la App Móvil del conductor (Fase 3).
+# ============================================================================
+# CAPA: SCHEMA (validación/serialización con Pydantic) — Clean Architecture
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Define los "moldes" de datos de RUTAS para la API:
+#               - Fase 2: peticiones/respuestas de asignación y optimización.
+#               - Fase 3: ruta activa, manifiesto, navegación, validación QR,
+#                 gestión de paradas y cierre.
+# ¿CON QUÉ SE CONECTA?
+#   - Lo USAN: api/rutas.py, api/conductor.py y services/ruta_service.py.
+# ============================================================================
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, field_validator
@@ -105,3 +114,30 @@ class CierreRutaResponse(BaseModel):
     fallidas: int
     pendientes: int
     mensaje: str
+
+
+# ============ FASE 2: Enrutamiento básico y VRP (CUS-18 / CUS-19) ============
+class AsignacionBloqueRequest(BaseModel):
+    """ENTRADA (CUS-18): el admin pide armar una ruta con un bloque de pedidos."""
+    nombre_ruta: str
+    distrito: str
+    conductor_id: int
+
+
+class AsignacionBloqueResponse(BaseModel):
+    """SALIDA (CUS-18): confirmación con el id de la ruta creada."""
+    mensaje: str
+    ruta_id: int
+
+
+class OptimizacionRequest(BaseModel):
+    """ENTRADA (CUS-19): el conductor pide optimizar su ruta desde su posición actual."""
+    ruta_id: int
+    latitud_actual_conductor: float
+    longitud_actual_conductor: float
+
+
+class OptimizacionResponse(BaseModel):
+    """SALIDA (CUS-19): confirmación con el número total de paradas optimizadas."""
+    mensaje: str
+    total_paradas: int

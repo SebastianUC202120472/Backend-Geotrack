@@ -1,5 +1,20 @@
 # app/services/ruta_service.py
-# Lógica de negocio de la operación de última milla (Fase 3).
+# ============================================================================
+# CAPA: SERVICIO (lógica de negocio) — Clean Architecture
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Reúne la lógica de RUTAS en dos momentos del MVP:
+#               - FASE 2 (admin/web): armar una ruta con pedidos (CUS-18) y
+#                 optimizar matemáticamente su secuencia (CUS-19).
+#               - FASE 3 (app móvil): consultar ruta activa, manifiesto,
+#                 navegación, validar QR, registrar entregas/evidencias y cerrar.
+# ¿CÓMO?      Coordina los repositorios (datos) con el motor VRP (router.py).
+# ¿CON QUÉ SE CONECTA?
+#   - repositories/ruta_repository.py   -> datos de rutas y detalles.
+#   - repositories/pedido_repository.py -> pedidos pendientes de un distrito.
+#   - services/router.py                -> algoritmo de optimización (Vecino + Cercano).
+#   - schemas/ruta.py                   -> moldes de respuesta.
+#   - Lo USAN: api/rutas.py (Fase 2) y api/conductor.py (Fase 3).
+# ============================================================================
 import os
 from datetime import datetime
 
@@ -8,7 +23,8 @@ from sqlalchemy.orm import Session
 
 from app.models.ruta import Ruta, RutaDetalle
 from app.models.pedido import Pedido
-from app.repositories import ruta_repository
+from app.repositories import ruta_repository, pedido_repository
+from app.services.router import optimizar_secuencia_pedidos
 from app.schemas.ruta import (
     RutaActivaResponse,
     ManifiestoResponse,
@@ -18,6 +34,8 @@ from app.schemas.ruta import (
     ValidacionQRResponse,
     GestionParadaResponse,
     CierreRutaResponse,
+    AsignacionBloqueRequest,
+    OptimizacionRequest,
 )
 
 # Carpeta donde se guardan las fotos POD (CUS-29). Servida en /media.
@@ -269,3 +287,69 @@ def finalizar_ruta(db: Session, conductor_id: int) -> CierreRutaResponse:
         pendientes=pendientes,
         mensaje=mensaje,
     )
+
+
+# ============ FASE 2: Enrutamiento básico (CUS-18) ============
+def asignar_bloque(db: Session, datos: AsignacionBloqueRequest) -> dict:
+    """
+    CUS-18: el admin crea una ruta para un conductor con TODOS los pedidos
+    PENDIENTES de un distrito.
+    Pasos: buscar pedidos -> crear la ruta -> colgar cada pedido como detalle
+           (secuencia=0, aún sin optimizar) -> marcar pedidos como 'ASIGNADO'.
+    """
+    pedidos = pedido_repository.obtener_pendientes_por_distrito(db, datos.distrito)
+    if not pedidos:
+        raise HTTPException(status_code=400, detail="No hay pedidos pendientes para esa zona")
+
+    ruta = ruta_repository.crear_ruta(db, nombre=datos.nombre_ruta, conductor_id=datos.conductor_id)
+
+    for pedido in pedidos:
+        ruta_repository.agregar_detalle(db, ruta_id=ruta.id, pedido_id=pedido.id, secuencia=0)
+        pedido.estado = "ASIGNADO"
+
+    ruta_repository.guardar_cambios(db)
+
+    return {
+        "mensaje": f"{len(pedidos)} pedidos asignados a la ruta '{datos.nombre_ruta}'",
+        "ruta_id": ruta.id,
+    }
+
+
+# ============ FASE 2: Optimización VRP (CUS-19) ============
+def optimizar_ruta(db: Session, datos: OptimizacionRequest, conductor_id: int) -> dict:
+    """
+    CUS-19: el conductor optimiza el orden de entrega de SU ruta partiendo de
+    su posición actual. Usa el algoritmo del Vecino Más Cercano (router.py).
+    """
+    ruta = ruta_repository.obtener_ruta_por_id(db, datos.ruta_id)
+    if not ruta:
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    # Seguridad: un conductor solo puede optimizar su propia ruta.
+    if ruta.conductor_id != conductor_id:
+        raise HTTPException(status_code=403, detail="Esta ruta no está asignada a tu usuario")
+
+    # Tomamos los pedidos de la ruta que tienen coordenadas válidas.
+    detalles = ruta_repository.obtener_detalles_con_pedido(db, ruta.id)
+    pedidos_validos = [pedido for _, pedido in detalles if pedido.latitud is not None]
+    if not pedidos_validos:
+        raise HTTPException(status_code=400, detail="La ruta no tiene pedidos válidos para optimizar")
+
+    # CEREBRO MATEMÁTICO: ordena los pedidos minimizando distancia (VRP greedy).
+    ordenados = optimizar_secuencia_pedidos(
+        pedidos_validos,
+        datos.latitud_actual_conductor,
+        datos.longitud_actual_conductor,
+    )
+
+    # Escribimos la secuencia final (1, 2, 3...) en cada detalle.
+    secuencia = 1
+    for pedido in ordenados:
+        detalle = ruta_repository.obtener_detalle_de_ruta(db, ruta.id, pedido.id)
+        detalle.secuencia = secuencia
+        pedido.estado = "EN_RUTA"
+        secuencia += 1
+
+    ruta_repository.guardar_cambios(db)
+
+    return {"mensaje": "Ruta optimizada matemáticamente", "total_paradas": len(ordenados)}

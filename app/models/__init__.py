@@ -1,1 +1,8 @@
+# app/models/__init__.py
+# Importamos TODOS los modelos aquí para que SQLAlchemy registre cada tabla en
+# Base.metadata. Esto lo aprovechan:
+#   - create_all (app/main.py) para crear las tablas al arrancar.
+#   - Alembic (alembic/env.py) para detectar cambios y generar migraciones.
 from .usuario import Usuario
+from .pedido import Pedido
+from .ruta import Ruta, RutaDetalle

@@ -1,5 +1,14 @@
 # app/repositories/ruta_repository.py
-# Capa de acceso a datos para Rutas (Clean Architecture).
+# ============================================================================
+# CAPA: REPOSITORIO (acceso a datos) — Clean Architecture
+# ----------------------------------------------------------------------------
+# ¿QUÉ HACE?  Única capa que consulta/escribe en las tablas 'rutas' y
+#             'ruta_detalles'. Reúne todos los queries de SQLAlchemy de rutas.
+# ¿CON QUÉ SE CONECTA?
+#   - models/ruta.py   -> tablas 'rutas' y 'ruta_detalles'.
+#   - models/pedido.py -> para unir cada detalle con su pedido (JOIN).
+#   - Lo USA: services/ruta_service.py (Fase 2 enrutamiento + Fase 3 operación).
+# ============================================================================
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
@@ -57,3 +66,32 @@ def obtener_detalle_de_ruta(
         )
         .first()
     )
+
+
+# --- Fase 2: creación de rutas (CUS-18) ---
+def obtener_ruta_por_id(db: Session, ruta_id: int) -> Optional[Ruta]:
+    """Busca una ruta por su id. Devuelve None si no existe."""
+    return db.query(Ruta).filter(Ruta.id == ruta_id).first()
+
+
+def crear_ruta(db: Session, nombre: str, conductor_id: int) -> Ruta:
+    """
+    Crea una ruta vacía y hace 'flush' para obtener su id YA mismo
+    (sin cerrar la transacción), porque enseguida le colgamos los detalles.
+    """
+    ruta = Ruta(nombre=nombre, conductor_id=conductor_id)
+    db.add(ruta)
+    db.flush()  # asigna ruta.id sin hacer commit todavía
+    return ruta
+
+
+def agregar_detalle(db: Session, ruta_id: int, pedido_id: int, secuencia: int = 0) -> RutaDetalle:
+    """Cuelga un pedido a una ruta (fila en 'ruta_detalles'). No hace commit."""
+    detalle = RutaDetalle(ruta_id=ruta_id, pedido_id=pedido_id, secuencia=secuencia)
+    db.add(detalle)
+    return detalle
+
+
+def guardar_cambios(db: Session) -> None:
+    """Confirma en PostgreSQL todos los cambios pendientes de la transacción."""
+    db.commit()
